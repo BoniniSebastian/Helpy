@@ -11,12 +11,6 @@ import {
   orderBy,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD14O8OlXzID8KBO4YswuTL6JsiiGt7rxk",
@@ -29,7 +23,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 const ADMIN_PIN = "5555";
 const PEOPLE = ["Milo", "Alice"];
@@ -95,6 +88,50 @@ function paidCompletions() {
   return completions.filter(c => c.paid);
 }
 
+function imageToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = e => {
+      img.src = e.target.result;
+    };
+
+    reader.onerror = reject;
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const maxSize = 900;
+
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height && width > maxSize) {
+        height = Math.round((height * maxSize) / width);
+        width = maxSize;
+      } else if (height > maxSize) {
+        width = Math.round((width * maxSize) / height);
+        height = maxSize;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
+    };
+
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function getImage(h) {
+  return h.imageData || h.imageUrl || "";
+}
+
 function renderAll() {
   renderUserStats();
   renderCards();
@@ -103,10 +140,10 @@ function renderAll() {
 }
 
 function renderUserStats() {
-  const html = PEOPLE.map(person => {
-    const personCompletions = completions.filter(c => c.person === person);
-    const pending = personCompletions.filter(c => !c.paid);
-    const paid = personCompletions.filter(c => c.paid);
+  els.userStats.innerHTML = PEOPLE.map(person => {
+    const all = completions.filter(c => c.person === person);
+    const pending = all.filter(c => !c.paid);
+    const paid = all.filter(c => c.paid);
 
     const pendingSum = pending.reduce((sum, c) => sum + Number(c.reward || 0), 0);
     const paidSum = paid.reduce((sum, c) => sum + Number(c.reward || 0), 0);
@@ -115,13 +152,11 @@ function renderUserStats() {
       <div class="person-stat">
         <h3>${person}</h3>
         <p><strong>Kommande utbetalning:</strong> ${money(pendingSum)}</p>
-        <p><strong>Antal utförda:</strong> ${personCompletions.length}</p>
+        <p><strong>Antal utförda:</strong> ${all.length}</p>
         <p><strong>Redan utbetalt:</strong> ${money(paidSum)}</p>
       </div>
     `;
   }).join("");
-
-  els.userStats.innerHTML = html;
 }
 
 function renderCards() {
@@ -134,7 +169,7 @@ function renderCards() {
 
   els.cardsGrid.innerHTML = cards.map(h => `
     <article class="helpy-card" data-open-helpy="${h.id}">
-      <img src="${h.imageUrl}" alt="">
+      <img src="${getImage(h)}" alt="">
       <div class="card-info">
         <div class="card-price">${money(h.reward)}</div>
         <div class="card-title">${escapeHtml(h.title)}</div>
@@ -144,23 +179,18 @@ function renderCards() {
 }
 
 function renderAdminStats() {
-  const totalCount = activeHelpys().length;
-  const totalValue = activeHelpys().reduce((sum, h) => sum + Number(h.reward || 0), 0);
-
+  const active = activeHelpys();
   const done = pendingCompletions();
-  const doneValue = done.reduce((sum, c) => sum + Number(c.reward || 0), 0);
-
   const paid = paidCompletions();
-  const paidValue = paid.reduce((sum, c) => sum + Number(c.reward || 0), 0);
 
-  els.statTotalCount.textContent = totalCount;
-  els.statTotalValue.textContent = `tot. ${money(totalValue)}`;
+  els.statTotalCount.textContent = active.length;
+  els.statTotalValue.textContent = `tot. ${money(active.reduce((s, h) => s + Number(h.reward || 0), 0))}`;
 
   els.statDoneCount.textContent = done.length;
-  els.statDoneValue.textContent = `tot. ${money(doneValue)}`;
+  els.statDoneValue.textContent = `tot. ${money(done.reduce((s, c) => s + Number(c.reward || 0), 0))}`;
 
   els.statPaidCount.textContent = paid.length;
-  els.statPaidValue.textContent = `tot. ${money(paidValue)}`;
+  els.statPaidValue.textContent = `tot. ${money(paid.reduce((s, c) => s + Number(c.reward || 0), 0))}`;
 }
 
 function renderAdminList() {
@@ -176,7 +206,7 @@ function renderAdminList() {
 
     els.adminList.innerHTML = items.map(h => `
       <div class="admin-item">
-        <img src="${h.imageUrl}" alt="">
+        <img src="${getImage(h)}" alt="">
         <div>
           <h3>${money(h.reward)} · ${escapeHtml(h.title)}</h3>
           <p><strong>Status:</strong> Aktuell</p>
@@ -199,7 +229,7 @@ function renderAdminList() {
 
     els.adminList.innerHTML = items.map(c => `
       <div class="admin-item">
-        <img src="${c.imageUrl}" alt="">
+        <img src="${c.imageData || c.imageUrl || ""}" alt="">
         <div>
           <h3>${money(c.reward)} · ${escapeHtml(c.title)}</h3>
           <p><strong>Utförd av:</strong> ${escapeHtml(c.person)}</p>
@@ -231,7 +261,7 @@ function renderAdminList() {
 
     const listHtml = paid.length ? paid.map(c => `
       <div class="admin-item">
-        <img src="${c.imageUrl}" alt="">
+        <img src="${c.imageData || c.imageUrl || ""}" alt="">
         <div>
           <h3>${money(c.reward)} · ${escapeHtml(c.title)}</h3>
           <p><strong>Utförd av:</strong> ${escapeHtml(c.person)}</p>
@@ -258,7 +288,7 @@ function openHelpyCard(id) {
   openModal(`
     <form class="form" id="completeForm">
       <h2>${escapeHtml(h.title)}</h2>
-      <img class="preview-img" src="${h.imageUrl}" alt="">
+      <img class="preview-img" src="${getImage(h)}" alt="">
       <p><strong>${money(h.reward)}</strong></p>
 
       <label>Vem är du?</label>
@@ -281,18 +311,23 @@ function openHelpyCard(id) {
     const person = form.person.value;
     const comment = form.comment.value.trim();
 
-    await addDoc(collection(db, "completions"), {
-      helpyId: h.id,
-      title: h.title,
-      reward: Number(h.reward || 0),
-      imageUrl: h.imageUrl,
-      person,
-      comment,
-      paid: false,
-      completedAt: serverTimestamp()
-    });
+    try {
+      await addDoc(collection(db, "completions"), {
+        helpyId: h.id,
+        title: h.title,
+        reward: Number(h.reward || 0),
+        imageData: getImage(h),
+        person,
+        comment,
+        paid: false,
+        completedAt: serverTimestamp()
+      });
 
-    closeModal();
+      closeModal();
+    } catch (err) {
+      alert("Kunde inte skicka. Kolla Firestore-reglerna.");
+      console.error(err);
+    }
   });
 }
 
@@ -300,10 +335,8 @@ function openAdminLogin() {
   openModal(`
     <form class="form" id="adminPinForm">
       <h2>Admin</h2>
-
       <label>PIN</label>
       <input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" required autofocus>
-
       <button class="submit-btn" type="submit">Öppna admin</button>
     </form>
   `);
@@ -311,9 +344,7 @@ function openAdminLogin() {
   document.getElementById("adminPinForm").addEventListener("submit", e => {
     e.preventDefault();
 
-    const pin = e.target.pin.value.trim();
-
-    if (pin !== ADMIN_PIN) {
+    if (e.target.pin.value.trim() !== ADMIN_PIN) {
       alert("Fel PIN");
       return;
     }
@@ -360,20 +391,32 @@ function openAddForm() {
     const title = form.title.value.trim();
     const reward = Number(form.reward.value);
 
-    if (!file || !title || !reward) return;
+    if (!file || !title || !reward) {
+      alert("Fyll i bild, text och värde.");
+      return;
+    }
 
-    const fileRef = ref(storage, `helpys/${Date.now()}-${file.name}`);
-    await uploadBytes(fileRef, file);
-    const imageUrl = await getDownloadURL(fileRef);
+    const btn = form.querySelector("button");
+    btn.disabled = true;
+    btn.textContent = "Sparar...";
 
-    await addDoc(collection(db, "helpys"), {
-      title,
-      reward,
-      imageUrl,
-      createdAt: serverTimestamp()
-    });
+    try {
+      const imageData = await imageToBase64(file);
 
-    closeModal();
+      await addDoc(collection(db, "helpys"), {
+        title,
+        reward,
+        imageData,
+        createdAt: serverTimestamp()
+      });
+
+      closeModal();
+    } catch (err) {
+      alert("Kunde inte spara. Kolla Firestore-reglerna.");
+      console.error(err);
+      btn.disabled = false;
+      btn.textContent = "Spara";
+    }
   });
 }
 
@@ -385,7 +428,7 @@ function openEditForm(id) {
     <form class="form" id="editForm">
       <h2>Ändra Helpy</h2>
 
-      <img class="preview-img" src="${h.imageUrl}" alt="">
+      <img class="preview-img" src="${getImage(h)}" alt="">
 
       <label>Ny bild frivilligt</label>
       <input name="image" type="file" accept="image/*">
@@ -411,38 +454,57 @@ function openEditForm(id) {
 
     const file = form.image.files[0];
 
-    if (file) {
-      const fileRef = ref(storage, `helpys/${Date.now()}-${file.name}`);
-      await uploadBytes(fileRef, file);
-      update.imageUrl = await getDownloadURL(fileRef);
-    }
+    try {
+      if (file) {
+        update.imageData = await imageToBase64(file);
+      }
 
-    await updateDoc(doc(db, "helpys", id), update);
-    closeModal();
+      await updateDoc(doc(db, "helpys", id), update);
+      closeModal();
+    } catch (err) {
+      alert("Kunde inte spara ändringen.");
+      console.error(err);
+    }
   });
 }
 
 async function deleteHelpy(id) {
   if (!confirm("Ta bort denna Helpy helt?")) return;
 
-  const related = completions.filter(c => c.helpyId === id);
-  for (const c of related) {
-    await deleteDoc(doc(db, "completions", c.id));
-  }
+  try {
+    const related = completions.filter(c => c.helpyId === id);
+    for (const c of related) {
+      await deleteDoc(doc(db, "completions", c.id));
+    }
 
-  await deleteDoc(doc(db, "helpys", id));
+    await deleteDoc(doc(db, "helpys", id));
+  } catch (err) {
+    alert("Kunde inte ta bort.");
+    console.error(err);
+  }
 }
 
 async function deleteCompletion(id) {
   if (!confirm("Ta bort denna registrering?")) return;
-  await deleteDoc(doc(db, "completions", id));
+
+  try {
+    await deleteDoc(doc(db, "completions", id));
+  } catch (err) {
+    alert("Kunde inte ta bort.");
+    console.error(err);
+  }
 }
 
 async function markPaid(id) {
-  await updateDoc(doc(db, "completions", id), {
-    paid: true,
-    paidAt: serverTimestamp()
-  });
+  try {
+    await updateDoc(doc(db, "completions", id), {
+      paid: true,
+      paidAt: serverTimestamp()
+    });
+  } catch (err) {
+    alert("Kunde inte markera som Klar.");
+    console.error(err);
+  }
 }
 
 document.addEventListener("click", e => {
@@ -478,7 +540,6 @@ els.logoutBtn.addEventListener("click", () => {
 });
 
 els.addBtn.addEventListener("click", openAddForm);
-
 els.closeModal.addEventListener("click", closeModal);
 
 els.modal.addEventListener("click", e => {
@@ -497,9 +558,15 @@ document.querySelectorAll(".tab").forEach(btn => {
 onSnapshot(query(collection(db, "helpys"), orderBy("createdAt", "desc")), snap => {
   helpys = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   renderAll();
+}, err => {
+  console.error(err);
+  alert("Kan inte läsa Helpys. Kolla Firestore-reglerna.");
 });
 
 onSnapshot(query(collection(db, "completions"), orderBy("completedAt", "desc")), snap => {
   completions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   renderAll();
+}, err => {
+  console.error(err);
+  alert("Kan inte läsa utförda Helpys. Kolla Firestore-reglerna.");
 });
