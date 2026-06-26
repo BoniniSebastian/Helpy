@@ -44,6 +44,7 @@ const els = {
   modal: document.getElementById("modal"),
   modalContent: document.getElementById("modalContent"),
   closeModal: document.getElementById("closeModal"),
+  toast: document.getElementById("toast"),
   statTotalCount: document.getElementById("statTotalCount"),
   statTotalValue: document.getElementById("statTotalValue"),
   statDoneCount: document.getElementById("statDoneCount"),
@@ -75,6 +76,12 @@ function closeModal() {
   els.modalContent.innerHTML = "";
 }
 
+function showToast(text) {
+  els.toast.innerHTML = text;
+  els.toast.classList.remove("hidden");
+  setTimeout(() => els.toast.classList.add("hidden"), 2200);
+}
+
 function activeHelpys() {
   const completedIds = new Set(completions.map(c => c.helpyId));
   return helpys.filter(h => !completedIds.has(h.id));
@@ -101,7 +108,7 @@ function imageToBase64(file) {
 
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      const maxSize = 900;
+      const maxSize = 800;
 
       let width = img.width;
       let height = img.height;
@@ -120,7 +127,7 @@ function imageToBase64(file) {
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0, width, height);
 
-      resolve(canvas.toDataURL("image/jpeg", 0.72));
+      resolve(canvas.toDataURL("image/jpeg", 0.68));
     };
 
     img.onerror = reject;
@@ -128,8 +135,8 @@ function imageToBase64(file) {
   });
 }
 
-function getImage(h) {
-  return h.imageData || h.imageUrl || "";
+function getImage(item) {
+  return item.imageData || item.imageUrl || "";
 }
 
 function renderAll() {
@@ -151,9 +158,9 @@ function renderUserStats() {
     return `
       <div class="person-stat">
         <h3>${person}</h3>
-        <p><strong>Kommande utbetalning:</strong> ${money(pendingSum)}</p>
+        <p><strong>Kommande:</strong> ${money(pendingSum)}</p>
         <p><strong>Antal utförda:</strong> ${all.length}</p>
-        <p><strong>Redan utbetalt:</strong> ${money(paidSum)}</p>
+        <p><strong>Utbetalt:</strong> ${money(paidSum)}</p>
       </div>
     `;
   }).join("");
@@ -229,7 +236,7 @@ function renderAdminList() {
 
     els.adminList.innerHTML = items.map(c => `
       <div class="admin-item">
-        <img src="${c.imageData || c.imageUrl || ""}" alt="">
+        <img src="${getImage(c)}" alt="">
         <div>
           <h3>${money(c.reward)} · ${escapeHtml(c.title)}</h3>
           <p><strong>Utförd av:</strong> ${escapeHtml(c.person)}</p>
@@ -261,7 +268,7 @@ function renderAdminList() {
 
     const listHtml = paid.length ? paid.map(c => `
       <div class="admin-item">
-        <img src="${c.imageData || c.imageUrl || ""}" alt="">
+        <img src="${getImage(c)}" alt="">
         <div>
           <h3>${money(c.reward)} · ${escapeHtml(c.title)}</h3>
           <p><strong>Utförd av:</strong> ${escapeHtml(c.person)}</p>
@@ -308,8 +315,9 @@ function openHelpyCard(id) {
     e.preventDefault();
 
     const form = e.target;
-    const person = form.person.value;
-    const comment = form.comment.value.trim();
+    const btn = form.querySelector("button");
+    btn.disabled = true;
+    btn.textContent = "Skickar...";
 
     try {
       await addDoc(collection(db, "completions"), {
@@ -317,16 +325,19 @@ function openHelpyCard(id) {
         title: h.title,
         reward: Number(h.reward || 0),
         imageData: getImage(h),
-        person,
-        comment,
+        person: form.person.value,
+        comment: form.comment.value.trim(),
         paid: false,
         completedAt: serverTimestamp()
       });
 
       closeModal();
+      showToast("✅ Helpy skickad<br>Väntar på utbetalning");
     } catch (err) {
       alert("Kunde inte skicka. Kolla Firestore-reglerna.");
       console.error(err);
+      btn.disabled = false;
+      btn.textContent = "Skicka";
     }
   });
 }
@@ -390,13 +401,13 @@ function openAddForm() {
     const file = form.image.files[0];
     const title = form.title.value.trim();
     const reward = Number(form.reward.value);
+    const btn = form.querySelector("button");
 
     if (!file || !title || !reward) {
       alert("Fyll i bild, text och värde.");
       return;
     }
 
-    const btn = form.querySelector("button");
     btn.disabled = true;
     btn.textContent = "Sparar...";
 
@@ -411,6 +422,7 @@ function openAddForm() {
       });
 
       closeModal();
+      showToast("✅ Helpy skapad");
     } catch (err) {
       alert("Kunde inte spara. Kolla Firestore-reglerna.");
       console.error(err);
@@ -447,6 +459,10 @@ function openEditForm(id) {
     e.preventDefault();
 
     const form = e.target;
+    const btn = form.querySelector("button");
+    btn.disabled = true;
+    btn.textContent = "Sparar...";
+
     const update = {
       title: form.title.value.trim(),
       reward: Number(form.reward.value)
@@ -455,15 +471,16 @@ function openEditForm(id) {
     const file = form.image.files[0];
 
     try {
-      if (file) {
-        update.imageData = await imageToBase64(file);
-      }
+      if (file) update.imageData = await imageToBase64(file);
 
       await updateDoc(doc(db, "helpys", id), update);
       closeModal();
+      showToast("✅ Ändring sparad");
     } catch (err) {
       alert("Kunde inte spara ändringen.");
       console.error(err);
+      btn.disabled = false;
+      btn.textContent = "Spara ändring";
     }
   });
 }
@@ -478,6 +495,7 @@ async function deleteHelpy(id) {
     }
 
     await deleteDoc(doc(db, "helpys", id));
+    showToast("Helpy borttagen");
   } catch (err) {
     alert("Kunde inte ta bort.");
     console.error(err);
@@ -489,6 +507,7 @@ async function deleteCompletion(id) {
 
   try {
     await deleteDoc(doc(db, "completions", id));
+    showToast("Registrering borttagen");
   } catch (err) {
     alert("Kunde inte ta bort.");
     console.error(err);
@@ -501,6 +520,7 @@ async function markPaid(id) {
       paid: true,
       paidAt: serverTimestamp()
     });
+    showToast("✅ Markerad som klar");
   } catch (err) {
     alert("Kunde inte markera som Klar.");
     console.error(err);
@@ -525,11 +545,8 @@ document.addEventListener("click", e => {
 });
 
 els.adminBtn.addEventListener("click", () => {
-  if (adminUnlocked) {
-    showAdmin();
-  } else {
-    openAdminLogin();
-  }
+  if (adminUnlocked) showAdmin();
+  else openAdminLogin();
 });
 
 els.closeAdminBtn.addEventListener("click", hideAdmin);
