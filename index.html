@@ -23,11 +23,15 @@
   <section id="adminView" class="admin-view hidden">
     <div class="admin-panel">
       <div class="admin-head">
-        <h2>Admin</h2>
         <div>
+          <h2>Admin</h2>
+          <p>Hantera Helpys</p>
+        </div>
+
+        <div class="admin-head-actions">
           <button id="closeAdminBtn" class="small-btn">Stäng adminvy</button>
           <button id="logoutBtn" class="small-btn white">Logga ut</button>
-          <button id="addBtn" class="plus-btn">+</button>
+          <button id="addBtn" class="new-btn">+ Ny Helpy</button>
         </div>
       </div>
 
@@ -53,6 +57,8 @@
       <div id="modalContent"></div>
     </div>
   </div>
+
+  <div id="toast" class="toast hidden"></div>
 
   <script type="module" src="script.js"></script>
 </body>
