@@ -31,6 +31,8 @@ let helpys = [];
 let completions = [];
 let currentTab = "current";
 let adminUnlocked = false;
+let loadedHelpys = false;
+let loadedCompletions = false;
 
 const els = {
   cardsGrid: document.getElementById("cardsGrid"),
@@ -100,15 +102,12 @@ function imageToBase64(file) {
     const img = new Image();
     const reader = new FileReader();
 
-    reader.onload = e => {
-      img.src = e.target.result;
-    };
-
+    reader.onload = e => img.src = e.target.result;
     reader.onerror = reject;
 
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      const maxSize = 800;
+      const maxSize = 520;
 
       let width = img.width;
       let height = img.height;
@@ -124,10 +123,8 @@ function imageToBase64(file) {
       canvas.width = width;
       canvas.height = height;
 
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
-
-      resolve(canvas.toDataURL("image/jpeg", 0.68));
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", 0.55));
     };
 
     img.onerror = reject;
@@ -167,6 +164,11 @@ function renderUserStats() {
 }
 
 function renderCards() {
+  if (!loadedHelpys || !loadedCompletions) {
+    els.cardsGrid.innerHTML = `<p class="empty">Laddar Helpys...</p>`;
+    return;
+  }
+
   const cards = activeHelpys();
 
   if (!cards.length) {
@@ -256,14 +258,7 @@ function renderAdminList() {
     const summary = PEOPLE.map(person => {
       const list = paid.filter(c => c.person === person);
       const sum = list.reduce((acc, c) => acc + Number(c.reward || 0), 0);
-
-      return `
-        <div>
-          <h3>${person}</h3>
-          <p>Antal: ${list.length}</p>
-          <p>Totalt: ${money(sum)}</p>
-        </div>
-      `;
+      return `<div><h3>${person}</h3><p>Antal: ${list.length}</p><p>Totalt: ${money(sum)}</p></div>`;
     }).join("");
 
     const listHtml = paid.length ? paid.map(c => `
@@ -281,10 +276,7 @@ function renderAdminList() {
       </div>
     `).join("") : `<p class="empty">Ingen historik ännu.</p>`;
 
-    els.adminList.innerHTML = `
-      <div class="history-summary">${summary}</div>
-      ${listHtml}
-    `;
+    els.adminList.innerHTML = `<div class="history-summary">${summary}</div>${listHtml}`;
   }
 }
 
@@ -424,7 +416,7 @@ function openAddForm() {
       closeModal();
       showToast("✅ Helpy skapad");
     } catch (err) {
-      alert("Kunde inte spara. Kolla Firestore-reglerna.");
+      alert("Kunde inte spara. Bilden kan vara för stor eller Firestore-reglerna stoppar.");
       console.error(err);
       btn.disabled = false;
       btn.textContent = "Spara";
@@ -439,7 +431,6 @@ function openEditForm(id) {
   openModal(`
     <form class="form" id="editForm">
       <h2>Ändra Helpy</h2>
-
       <img class="preview-img" src="${getImage(h)}" alt="">
 
       <label>Ny bild frivilligt</label>
@@ -574,16 +565,18 @@ document.querySelectorAll(".tab").forEach(btn => {
 
 onSnapshot(query(collection(db, "helpys"), orderBy("createdAt", "desc")), snap => {
   helpys = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  loadedHelpys = true;
   renderAll();
 }, err => {
   console.error(err);
-  alert("Kan inte läsa Helpys. Kolla Firestore-reglerna.");
+  els.cardsGrid.innerHTML = `<p class="empty">Kan inte läsa Helpys. Kolla Firestore-reglerna.</p>`;
 });
 
 onSnapshot(query(collection(db, "completions"), orderBy("completedAt", "desc")), snap => {
   completions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  loadedCompletions = true;
   renderAll();
 }, err => {
   console.error(err);
-  alert("Kan inte läsa utförda Helpys. Kolla Firestore-reglerna.");
+  els.cardsGrid.innerHTML = `<p class="empty">Kan inte läsa utförda Helpys. Kolla Firestore-reglerna.</p>`;
 });
