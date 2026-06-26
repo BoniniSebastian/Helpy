@@ -17,12 +17,6 @@ import {
   uploadBytes,
   getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD14O8OlXzID8KBO4YswuTL6JsiiGt7rxk",
@@ -36,9 +30,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
-const auth = getAuth(app);
 
-const ADMIN_PIN = "1234";
+const ADMIN_PIN = "5555";
 const PEOPLE = ["Milo", "Alice"];
 
 let helpys = [];
@@ -305,42 +298,29 @@ function openHelpyCard(id) {
 
 function openAdminLogin() {
   openModal(`
-    <form class="form" id="adminLoginForm">
+    <form class="form" id="adminPinForm">
       <h2>Admin</h2>
 
-      <label>Email</label>
-      <input name="email" type="email" required autocomplete="email">
-
-      <label>Lösenord</label>
-      <input name="password" type="password" required autocomplete="current-password">
-
       <label>PIN</label>
-      <input name="pin" type="password" inputmode="numeric" required>
+      <input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" required autofocus>
 
-      <button class="submit-btn" type="submit">Logga in</button>
+      <button class="submit-btn" type="submit">Öppna admin</button>
     </form>
   `);
 
-  document.getElementById("adminLoginForm").addEventListener("submit", async e => {
+  document.getElementById("adminPinForm").addEventListener("submit", e => {
     e.preventDefault();
 
-    const form = e.target;
-    const pin = form.pin.value.trim();
+    const pin = e.target.pin.value.trim();
 
     if (pin !== ADMIN_PIN) {
       alert("Fel PIN");
       return;
     }
 
-    try {
-      await signInWithEmailAndPassword(auth, form.email.value.trim(), form.password.value);
-      adminUnlocked = true;
-      closeModal();
-      showAdmin();
-    } catch (err) {
-      alert("Kunde inte logga in. Kontrollera email/lösenord.");
-      console.error(err);
-    }
+    adminUnlocked = true;
+    closeModal();
+    showAdmin();
   });
 }
 
@@ -483,7 +463,7 @@ document.addEventListener("click", e => {
 });
 
 els.adminBtn.addEventListener("click", () => {
-  if (auth.currentUser && adminUnlocked) {
+  if (adminUnlocked) {
     showAdmin();
   } else {
     openAdminLogin();
@@ -492,8 +472,7 @@ els.adminBtn.addEventListener("click", () => {
 
 els.closeAdminBtn.addEventListener("click", hideAdmin);
 
-els.logoutBtn.addEventListener("click", async () => {
-  await signOut(auth);
+els.logoutBtn.addEventListener("click", () => {
   adminUnlocked = false;
   hideAdmin();
 });
@@ -513,13 +492,6 @@ document.querySelectorAll(".tab").forEach(btn => {
     currentTab = btn.dataset.tab;
     renderAdminList();
   });
-});
-
-onAuthStateChanged(auth, user => {
-  if (!user) {
-    adminUnlocked = false;
-    hideAdmin();
-  }
 });
 
 onSnapshot(query(collection(db, "helpys"), orderBy("createdAt", "desc")), snap => {
