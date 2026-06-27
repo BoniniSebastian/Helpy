@@ -126,14 +126,8 @@ function unlockBody() {
 }
 
 function anyModalOpen() {
-  return [
-    pinModal,
-    uploadModal,
-    editModal,
-    productModal,
-    doneModal,
-    familyStatsModal
-  ].some(modal => !modal.classList.contains("hidden"));
+  return [pinModal, uploadModal, editModal, productModal, doneModal, familyStatsModal]
+    .some(modal => !modal.classList.contains("hidden"));
 }
 
 function openModal(modal) {
@@ -142,6 +136,11 @@ function openModal(modal) {
 }
 
 function closeModal(modal) {
+  modal.classList.add("hidden");
+  if (!anyModalOpen()) unlockBody();
+}
+
+function forceCloseModal(modal) {
   modal.classList.add("hidden");
   if (!anyModalOpen()) unlockBody();
 }
@@ -234,34 +233,25 @@ function updateStats() {
   const completed = allItems.filter(item => statusOf(item) === "completed");
   const paid = allItems.filter(item => statusOf(item) === "paid");
 
-  const availableTotal = available.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
-  const completedTotal = completed.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
-  const paidTotal = paid.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
-
   statAvailable.textContent = available.length;
-  statAvailableValue.textContent = `tot. ${formatKr(availableTotal)}`;
+  statAvailableValue.textContent = `tot. ${formatKr(available.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
 
   statCompleted.textContent = completed.length;
-  statCompletedValue.textContent = `tot. ${formatKr(completedTotal)}`;
+  statCompletedValue.textContent = `tot. ${formatKr(completed.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
 
   statPaid.textContent = paid.length;
-  statPaidValue.textContent = `tot. ${formatKr(paidTotal)}`;
+  statPaidValue.textContent = `tot. ${formatKr(paid.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
 
   updateFamilyStats();
 }
 
 function sortItems(items) {
-  return [...items].sort((a, b) => {
-    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
-  });
+  return [...items].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
 function renderGallery() {
   gallery.innerHTML = "";
-
-  publicItems = sortItems(
-    allItems.filter(item => statusOf(item) === "available")
-  );
+  publicItems = sortItems(allItems.filter(item => statusOf(item) === "available"));
 
   if (publicItems.length === 0) {
     gallery.innerHTML = "<p>Inga aktuella Helpys just nu.</p>";
@@ -297,7 +287,7 @@ function renderAdmin() {
 
   historySplit.classList.toggle("hidden", currentAdminFilter !== "paid");
 
-  let items = sortItems(allItems).filter(item => statusOf(item) === currentAdminFilter);
+  const items = sortItems(allItems).filter(item => statusOf(item) === currentAdminFilter);
 
   if (items.length === 0) {
     adminList.innerHTML = `<p>Inget att visa under ${filterName(currentAdminFilter)}.</p>`;
@@ -437,7 +427,7 @@ async function saveEditItem() {
       updatedAt: serverTimestamp()
     });
 
-    closeModal(editModal);
+    forceCloseModal(editModal);
     currentEditItem = null;
     showToast("Ändringen är sparad");
   } catch (err) {
@@ -493,8 +483,8 @@ async function submitDone() {
       completedAt: serverTimestamp()
     });
 
-    closeModal(doneModal);
-    closeModal(productModal);
+    forceCloseModal(doneModal);
+    forceCloseModal(productModal);
     showToast("Bra jobbat! Skickad för utbetalning 💚");
   } catch (err) {
     console.error(err);
@@ -519,7 +509,6 @@ async function uploadNewItem() {
 
   try {
     const imageData = await compressImageToFirestoreSize(file);
-
     uploadStatus.textContent = "Sparar Helpy...";
 
     const id = crypto.randomUUID();
@@ -541,9 +530,14 @@ async function uploadNewItem() {
     itemReward.value = "";
     uploadStatus.textContent = "";
 
-    closeModal(uploadModal);
+    forceCloseModal(uploadModal);
+
     currentAdminFilter = "available";
     setActiveFilter("available");
+    renderAdmin();
+    renderGallery();
+    updateStats();
+
     showToast("Helpy skapad");
   } catch (err) {
     console.error(err);
@@ -589,8 +583,7 @@ function resizeImage(file, maxWidth, quality) {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
-        const dataUrl = canvas.toDataURL("image/jpeg", quality);
-        resolve(dataUrl);
+        resolve(canvas.toDataURL("image/jpeg", quality));
       };
 
       img.onerror = reject;
@@ -648,7 +641,7 @@ pinSubmit.addEventListener("click", () => {
     localStorage.setItem("helpy_admin", "true");
     pinInput.value = "";
     pinError.textContent = "";
-    closeModal(pinModal);
+    forceCloseModal(pinModal);
     applyAdminState();
     showToast("Adminläge öppnat");
   } else {
@@ -722,14 +715,7 @@ document.querySelectorAll(".filter").forEach(button => {
   });
 });
 
-[
-  productModal,
-  doneModal,
-  pinModal,
-  uploadModal,
-  editModal,
-  familyStatsModal
-].forEach(modal => {
+[productModal, doneModal, pinModal, uploadModal, editModal, familyStatsModal].forEach(modal => {
   modal.addEventListener("click", e => {
     if (e.target === modal) closeModal(modal);
   });
