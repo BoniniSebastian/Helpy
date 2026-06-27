@@ -125,9 +125,19 @@ function unlockBody() {
   window.scrollTo(0, scrollYBeforeLock);
 }
 
+function allModals() {
+  return [
+    pinModal,
+    uploadModal,
+    editModal,
+    productModal,
+    doneModal,
+    familyStatsModal
+  ];
+}
+
 function anyModalOpen() {
-  return [pinModal, uploadModal, editModal, productModal, doneModal, familyStatsModal]
-    .some(modal => !modal.classList.contains("hidden"));
+  return allModals().some(modal => !modal.classList.contains("hidden"));
 }
 
 function openModal(modal) {
@@ -140,9 +150,9 @@ function closeModal(modal) {
   if (!anyModalOpen()) unlockBody();
 }
 
-function forceCloseModal(modal) {
-  modal.classList.add("hidden");
-  if (!anyModalOpen()) unlockBody();
+function closeAllModals() {
+  allModals().forEach(modal => modal.classList.add("hidden"));
+  unlockBody();
 }
 
 function statusOf(item) {
@@ -173,11 +183,13 @@ function formatKr(value) {
 
 function childStats(childName) {
   const childItems = allItems.filter(item => item.childName === childName);
+
   const pending = childItems
     .filter(item => statusOf(item) === "completed")
     .reduce((sum, item) => sum + rewardNumber(item.reward), 0);
 
   const paidItems = childItems.filter(item => statusOf(item) === "paid");
+
   const paid = paidItems.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
 
   return {
@@ -199,6 +211,7 @@ function animateMoney(el, value) {
     const progress = Math.min(1, (now - start) / duration);
     const eased = 1 - Math.pow(1 - progress, 3);
     const current = from + (to - from) * eased;
+
     el.textContent = formatKr(current);
 
     if (progress < 1) {
@@ -233,25 +246,34 @@ function updateStats() {
   const completed = allItems.filter(item => statusOf(item) === "completed");
   const paid = allItems.filter(item => statusOf(item) === "paid");
 
+  const availableTotal = available.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
+  const completedTotal = completed.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
+  const paidTotal = paid.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
+
   statAvailable.textContent = available.length;
-  statAvailableValue.textContent = `tot. ${formatKr(available.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
+  statAvailableValue.textContent = `tot. ${formatKr(availableTotal)}`;
 
   statCompleted.textContent = completed.length;
-  statCompletedValue.textContent = `tot. ${formatKr(completed.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
+  statCompletedValue.textContent = `tot. ${formatKr(completedTotal)}`;
 
   statPaid.textContent = paid.length;
-  statPaidValue.textContent = `tot. ${formatKr(paid.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
+  statPaidValue.textContent = `tot. ${formatKr(paidTotal)}`;
 
   updateFamilyStats();
 }
 
 function sortItems(items) {
-  return [...items].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return [...items].sort((a, b) => {
+    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+  });
 }
 
 function renderGallery() {
   gallery.innerHTML = "";
-  publicItems = sortItems(allItems.filter(item => statusOf(item) === "available"));
+
+  publicItems = sortItems(
+    allItems.filter(item => statusOf(item) === "available")
+  );
 
   if (publicItems.length === 0) {
     gallery.innerHTML = "<p>Inga aktuella Helpys just nu.</p>";
@@ -336,6 +358,7 @@ function adminButtons(status) {
   if (status === "available") {
     return `
       <button data-action="edit" class="primary-action secondary">Ändra</button>
+      <button data-action="repeat" class="secondary">➕</button>
       <button data-action="delete" class="danger">Ta bort</button>
     `;
   }
@@ -343,6 +366,7 @@ function adminButtons(status) {
   if (status === "completed") {
     return `
       <button data-action="paid" class="primary-action">Klar</button>
+      <button data-action="repeat" class="secondary">➕</button>
       <button data-action="available" class="secondary">Lägg tillbaks</button>
       <button data-action="delete" class="danger">Ta bort</button>
     `;
@@ -350,12 +374,30 @@ function adminButtons(status) {
 
   if (status === "paid") {
     return `
-      <button data-action="available" class="secondary primary-action">Lägg tillbaks</button>
+      <button data-action="repeat" class="secondary primary-action">➕</button>
+      <button data-action="available" class="secondary">Lägg tillbaks</button>
       <button data-action="delete" class="danger">Ta bort</button>
     `;
   }
 
   return "";
+}
+
+async function createRepeatItem(item) {
+  const id = crypto.randomUUID();
+
+  await setDoc(doc(db, COLLECTION_NAME, id), {
+    imageData: item.imageData,
+    title: item.title,
+    reward: item.reward,
+    status: "available",
+    childName: "",
+    childComment: "",
+    createdAt: serverTimestamp(),
+    completedAt: null,
+    paidAt: null,
+    repeatedFrom: item.id
+  });
 }
 
 async function handleAdminAction(item, action) {
@@ -364,6 +406,12 @@ async function handleAdminAction(item, action) {
   try {
     if (action === "edit") {
       openEditModal(item);
+      return;
+    }
+
+    if (action === "repeat") {
+      await createRepeatItem(item);
+      showToast("Ny Helpy skapad");
       return;
     }
 
@@ -389,6 +437,7 @@ async function handleAdminAction(item, action) {
     if (action === "delete") {
       const ok = confirm("Vill du ta bort denna Helpy helt?");
       if (!ok) return;
+
       await deleteDoc(itemRef);
       showToast("Helpy borttagen");
     }
@@ -427,7 +476,7 @@ async function saveEditItem() {
       updatedAt: serverTimestamp()
     });
 
-    forceCloseModal(editModal);
+    closeAllModals();
     currentEditItem = null;
     showToast("Ändringen är sparad");
   } catch (err) {
@@ -452,9 +501,12 @@ function openProduct(index) {
 
 function moveProduct(direction) {
   if (!publicItems.length) return;
+
   currentIndex += direction;
+
   if (currentIndex < 0) currentIndex = publicItems.length - 1;
   if (currentIndex >= publicItems.length) currentIndex = 0;
+
   openProduct(currentIndex);
 }
 
@@ -483,8 +535,7 @@ async function submitDone() {
       completedAt: serverTimestamp()
     });
 
-    forceCloseModal(doneModal);
-    forceCloseModal(productModal);
+    closeAllModals();
     showToast("Bra jobbat! Skickad för utbetalning 💚");
   } catch (err) {
     console.error(err);
@@ -509,6 +560,7 @@ async function uploadNewItem() {
 
   try {
     const imageData = await compressImageToFirestoreSize(file);
+
     uploadStatus.textContent = "Sparar Helpy...";
 
     const id = crypto.randomUUID();
@@ -530,7 +582,7 @@ async function uploadNewItem() {
     itemReward.value = "";
     uploadStatus.textContent = "";
 
-    forceCloseModal(uploadModal);
+    closeAllModals();
 
     currentAdminFilter = "available";
     setActiveFilter("available");
@@ -583,7 +635,8 @@ function resizeImage(file, maxWidth, quality) {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
-        resolve(canvas.toDataURL("image/jpeg", quality));
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl);
       };
 
       img.onerror = reject;
@@ -639,9 +692,11 @@ pinSubmit.addEventListener("click", () => {
     isAdmin = true;
     adminVisible = true;
     localStorage.setItem("helpy_admin", "true");
+
     pinInput.value = "";
     pinError.textContent = "";
-    forceCloseModal(pinModal);
+
+    closeAllModals();
     applyAdminState();
     showToast("Adminläge öppnat");
   } else {
@@ -685,14 +740,22 @@ doneButton.addEventListener("click", () => {
   selectedChild = "";
   childComment.value = "";
   doneStatus.textContent = "";
-  document.querySelectorAll(".child-option").forEach(btn => btn.classList.remove("active"));
+
+  document.querySelectorAll(".child-option").forEach(btn => {
+    btn.classList.remove("active");
+  });
+
   openModal(doneModal);
 });
 
 document.querySelectorAll(".child-option").forEach(button => {
   button.addEventListener("click", () => {
     selectedChild = button.dataset.child;
-    document.querySelectorAll(".child-option").forEach(btn => btn.classList.remove("active"));
+
+    document.querySelectorAll(".child-option").forEach(btn => {
+      btn.classList.remove("active");
+    });
+
     button.classList.add("active");
   });
 });
@@ -715,7 +778,7 @@ document.querySelectorAll(".filter").forEach(button => {
   });
 });
 
-[productModal, doneModal, pinModal, uploadModal, editModal, familyStatsModal].forEach(modal => {
+allModals().forEach(modal => {
   modal.addEventListener("click", e => {
     if (e.target === modal) closeModal(modal);
   });
@@ -729,6 +792,7 @@ familyStatsModal.addEventListener("touchstart", e => {
 
 familyStatsModal.addEventListener("touchend", e => {
   const touchEndY = e.changedTouches[0].clientY;
+
   if (touchEndY - touchStartY > 90) {
     closeModal(familyStatsModal);
   }
