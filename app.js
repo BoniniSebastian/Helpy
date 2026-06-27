@@ -37,33 +37,54 @@ const closePin = document.getElementById("closePin");
 const pinInput = document.getElementById("pinInput");
 const pinSubmit = document.getElementById("pinSubmit");
 const pinError = document.getElementById("pinError");
-
 const logoutAdmin = document.getElementById("logoutAdmin");
-const closeAdminView = document.getElementById("closeAdminView");
+const closeAdminPanel = document.getElementById("closeAdminPanel");
 
 const openUpload = document.getElementById("openUpload");
 const uploadModal = document.getElementById("uploadModal");
 const closeUpload = document.getElementById("closeUpload");
-const helpyImage = document.getElementById("helpyImage");
-const helpyTitle = document.getElementById("helpyTitle");
-const helpyReward = document.getElementById("helpyReward");
-const uploadHelpy = document.getElementById("uploadHelpy");
+const itemImage = document.getElementById("itemImage");
+const itemTitle = document.getElementById("itemTitle");
+const itemReward = document.getElementById("itemReward");
+const uploadItem = document.getElementById("uploadItem");
 const uploadStatus = document.getElementById("uploadStatus");
 
 const editModal = document.getElementById("editModal");
 const closeEdit = document.getElementById("closeEdit");
 const editTitle = document.getElementById("editTitle");
 const editReward = document.getElementById("editReward");
-const editImage = document.getElementById("editImage");
 const saveEdit = document.getElementById("saveEdit");
 const editStatus = document.getElementById("editStatus");
 
 const statAvailable = document.getElementById("statAvailable");
 const statAvailableValue = document.getElementById("statAvailableValue");
-const statPending = document.getElementById("statPending");
-const statPendingValue = document.getElementById("statPendingValue");
+const statCompleted = document.getElementById("statCompleted");
+const statCompletedValue = document.getElementById("statCompletedValue");
 const statPaid = document.getElementById("statPaid");
 const statPaidValue = document.getElementById("statPaidValue");
+
+const historySplit = document.getElementById("historySplit");
+const historyMilo = document.getElementById("historyMilo");
+const historyAlice = document.getElementById("historyAlice");
+
+const productModal = document.getElementById("productModal");
+const closeProduct = document.getElementById("closeProduct");
+const modalImage = document.getElementById("modalImage");
+const modalTitle = document.getElementById("modalTitle");
+const modalReward = document.getElementById("modalReward");
+const doneButton = document.getElementById("doneButton");
+const prevItem = document.getElementById("prevItem");
+const nextItem = document.getElementById("nextItem");
+
+const doneModal = document.getElementById("doneModal");
+const closeDone = document.getElementById("closeDone");
+const childComment = document.getElementById("childComment");
+const sendDone = document.getElementById("sendDone");
+const doneStatus = document.getElementById("doneStatus");
+
+const statsButton = document.getElementById("statsButton");
+const familyStatsModal = document.getElementById("familyStatsModal");
+const closeFamilyStats = document.getElementById("closeFamilyStats");
 
 const miloPending = document.getElementById("miloPending");
 const miloDone = document.getElementById("miloDone");
@@ -72,33 +93,57 @@ const alicePending = document.getElementById("alicePending");
 const aliceDone = document.getElementById("aliceDone");
 const alicePaid = document.getElementById("alicePaid");
 
-const helpyModal = document.getElementById("helpyModal");
-const closeHelpy = document.getElementById("closeHelpy");
-const modalImage = document.getElementById("modalImage");
-const modalReward = document.getElementById("modalReward");
-const modalTitle = document.getElementById("modalTitle");
-const doneButton = document.getElementById("doneButton");
-
-const doneModal = document.getElementById("doneModal");
-const closeDone = document.getElementById("closeDone");
-const donePerson = document.getElementById("donePerson");
-const doneComment = document.getElementById("doneComment");
-const sendDone = document.getElementById("sendDone");
-const doneStatus = document.getElementById("doneStatus");
-
 const toast = document.getElementById("toast");
 
 let allItems = [];
 let publicItems = [];
-let currentAdminFilter = "available";
+let currentIndex = 0;
+let currentAdminFilter = "completed";
 let currentEditItem = null;
-let currentItem = null;
+let selectedChild = "";
 let isAdmin = localStorage.getItem("helpy_admin") === "true";
+let adminVisible = isAdmin;
+let scrollYBeforeLock = 0;
+
+const animatedValues = new Map();
 
 function showToast(text) {
-  toast.innerHTML = text;
+  toast.textContent = text;
   toast.classList.remove("hidden");
   setTimeout(() => toast.classList.add("hidden"), 2600);
+}
+
+function lockBody() {
+  scrollYBeforeLock = window.scrollY || 0;
+  document.body.style.top = `-${scrollYBeforeLock}px`;
+  document.body.classList.add("modal-open");
+}
+
+function unlockBody() {
+  document.body.classList.remove("modal-open");
+  document.body.style.top = "";
+  window.scrollTo(0, scrollYBeforeLock);
+}
+
+function anyModalOpen() {
+  return [
+    pinModal,
+    uploadModal,
+    editModal,
+    productModal,
+    doneModal,
+    familyStatsModal
+  ].some(modal => !modal.classList.contains("hidden"));
+}
+
+function openModal(modal) {
+  modal.classList.remove("hidden");
+  lockBody();
+}
+
+function closeModal(modal) {
+  modal.classList.add("hidden");
+  if (!anyModalOpen()) unlockBody();
 }
 
 function statusOf(item) {
@@ -107,31 +152,102 @@ function statusOf(item) {
 
 function statusLabel(status) {
   if (status === "available") return "Aktuell";
-  if (status === "pending") return "Betala ut";
+  if (status === "completed") return "Betala ut";
   if (status === "paid") return "Historik";
   return "Aktuell";
 }
 
-function rewardNumber(value) {
-  const cleaned = String(value || "").replace(",", ".").match(/\d+(\.\d+)?/);
+function rewardNumber(reward) {
+  const cleaned = String(reward || "").replace(",", ".").match(/\d+(\.\d+)?/);
   return cleaned ? Number(cleaned[0]) : 0;
 }
 
+function normalizeReward(reward) {
+  const number = rewardNumber(reward);
+  if (!number) return "";
+  return `${Math.round(number).toLocaleString("sv-SE")} kr`;
+}
+
 function formatKr(value) {
-  return `${Math.round(Number(value || 0)).toLocaleString("sv-SE")} kr`;
+  return `${Math.round(value).toLocaleString("sv-SE")} kr`;
 }
 
-function getRewardText(item) {
-  return formatKr(rewardNumber(item.reward));
+function childStats(childName) {
+  const childItems = allItems.filter(item => item.childName === childName);
+  const pending = childItems
+    .filter(item => statusOf(item) === "completed")
+    .reduce((sum, item) => sum + rewardNumber(item.reward), 0);
+
+  const paidItems = childItems.filter(item => statusOf(item) === "paid");
+  const paid = paidItems.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
+
+  return {
+    pending,
+    done: childItems.filter(item => ["completed", "paid"].includes(statusOf(item))).length,
+    paid,
+    paidCount: paidItems.length
+  };
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function animateMoney(el, value) {
+  const key = el.id;
+  const from = animatedValues.has(key) ? animatedValues.get(key) : value;
+  const to = Math.round(value);
+  const start = performance.now();
+  const duration = 300;
+
+  function frame(now) {
+    const progress = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = from + (to - from) * eased;
+    el.textContent = formatKr(current);
+
+    if (progress < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      animatedValues.set(key, to);
+      el.textContent = formatKr(to);
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+
+function updateFamilyStats() {
+  const milo = childStats("Milo");
+  const alice = childStats("Alice");
+
+  animateMoney(miloPending, milo.pending);
+  miloDone.textContent = milo.done;
+  animateMoney(miloPaid, milo.paid);
+
+  animateMoney(alicePending, alice.pending);
+  aliceDone.textContent = alice.done;
+  animateMoney(alicePaid, alice.paid);
+
+  historyMilo.textContent = `${milo.paidCount} Helpys · ${formatKr(milo.paid)}`;
+  historyAlice.textContent = `${alice.paidCount} Helpys · ${formatKr(alice.paid)}`;
+}
+
+function updateStats() {
+  const available = allItems.filter(item => statusOf(item) === "available");
+  const completed = allItems.filter(item => statusOf(item) === "completed");
+  const paid = allItems.filter(item => statusOf(item) === "paid");
+
+  const availableTotal = available.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
+  const completedTotal = completed.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
+  const paidTotal = paid.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
+
+  statAvailable.textContent = available.length;
+  statAvailableValue.textContent = `tot. ${formatKr(availableTotal)}`;
+
+  statCompleted.textContent = completed.length;
+  statCompletedValue.textContent = `tot. ${formatKr(completedTotal)}`;
+
+  statPaid.textContent = paid.length;
+  statPaidValue.textContent = `tot. ${formatKr(paidTotal)}`;
+
+  updateFamilyStats();
 }
 
 function sortItems(items) {
@@ -140,106 +256,51 @@ function sortItems(items) {
   });
 }
 
-function personStats(person) {
-  const personItems = allItems.filter(item => item.person === person);
-  const pending = personItems.filter(item => statusOf(item) === "pending");
-  const paid = personItems.filter(item => statusOf(item) === "paid");
-
-  return {
-    pendingValue: pending.reduce((sum, item) => sum + rewardNumber(item.reward), 0),
-    paidValue: paid.reduce((sum, item) => sum + rewardNumber(item.reward), 0),
-    doneCount: personItems.filter(item => statusOf(item) === "pending" || statusOf(item) === "paid").length
-  };
-}
-
-function updateKidStats() {
-  const milo = personStats("Milo");
-  const alice = personStats("Alice");
-
-  miloPending.textContent = formatKr(milo.pendingValue);
-  miloDone.textContent = milo.doneCount;
-  miloPaid.textContent = formatKr(milo.paidValue);
-
-  alicePending.textContent = formatKr(alice.pendingValue);
-  aliceDone.textContent = alice.doneCount;
-  alicePaid.textContent = formatKr(alice.paidValue);
-}
-
-function updateAdminStats() {
-  const available = allItems.filter(item => statusOf(item) === "available");
-  const pending = allItems.filter(item => statusOf(item) === "pending");
-  const paid = allItems.filter(item => statusOf(item) === "paid");
-
-  statAvailable.textContent = available.length;
-  statAvailableValue.textContent = `tot. ${formatKr(available.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
-
-  statPending.textContent = pending.length;
-  statPendingValue.textContent = `tot. ${formatKr(pending.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
-
-  statPaid.textContent = paid.length;
-  statPaidValue.textContent = `tot. ${formatKr(paid.reduce((sum, item) => sum + rewardNumber(item.reward), 0))}`;
-}
-
 function renderGallery() {
   gallery.innerHTML = "";
 
-  publicItems = sortItems(allItems.filter(item => statusOf(item) === "available"));
+  publicItems = sortItems(
+    allItems.filter(item => statusOf(item) === "available")
+  );
 
   if (publicItems.length === 0) {
     gallery.innerHTML = "<p>Inga aktuella Helpys just nu.</p>";
     return;
   }
 
-  publicItems.forEach(item => {
+  publicItems.forEach((item, index) => {
     const card = document.createElement("article");
     card.className = "card";
 
     card.innerHTML = `
       <img src="${item.imageData}" alt="Helpy" />
       <div class="card-info">
-        <div class="card-price">${getRewardText(item)}</div>
         <div class="card-title">${escapeHtml(item.title || "")}</div>
+        <div class="card-reward">${escapeHtml(item.reward || "")}</div>
       </div>
     `;
 
-    card.addEventListener("click", () => openHelpy(item));
+    card.addEventListener("click", () => openProduct(index));
     gallery.appendChild(card);
   });
 }
 
 function renderAdmin() {
-  if (!isAdmin) {
+  if (!isAdmin || !adminVisible) {
     adminPanel.classList.add("hidden");
     return;
   }
 
   adminPanel.classList.remove("hidden");
   adminList.innerHTML = "";
-  updateAdminStats();
+  updateStats();
 
-  const items = sortItems(allItems).filter(item => statusOf(item) === currentAdminFilter);
+  historySplit.classList.toggle("hidden", currentAdminFilter !== "paid");
 
-  if (currentAdminFilter === "paid") {
-    const summary = document.createElement("div");
-    summary.className = "history-summary";
-    summary.innerHTML = ["Milo", "Alice"].map(person => {
-      const paid = allItems.filter(item => statusOf(item) === "paid" && item.person === person);
-      const total = paid.reduce((sum, item) => sum + rewardNumber(item.reward), 0);
-
-      return `
-        <div class="stat-card">
-          <div class="stat-number">${paid.length}</div>
-          <div class="stat-label">${formatKr(total)}</div>
-          <div class="stat-title">${person}</div>
-        </div>
-      `;
-    }).join("");
-
-    adminList.appendChild(summary);
-  }
+  let items = sortItems(allItems).filter(item => statusOf(item) === currentAdminFilter);
 
   if (items.length === 0) {
-    adminList.innerHTML += `<p>Inget att visa under ${filterName(currentAdminFilter)}.</p>`;
+    adminList.innerHTML = `<p>Inget att visa under ${filterName(currentAdminFilter)}.</p>`;
     return;
   }
 
@@ -251,10 +312,15 @@ function renderAdmin() {
     card.innerHTML = `
       <img src="${item.imageData}" alt="Helpy" />
       <div>
-        <h4>${getRewardText(item)} · ${escapeHtml(item.title || "")}</h4>
+        <h4>${escapeHtml(item.reward || "")}</h4>
+        <p><strong>Uppgift:</strong> ${escapeHtml(item.title || "")}</p>
         <p><strong>Status:</strong> ${statusLabel(status)}</p>
-        ${item.person ? `<p><strong>Utförd av:</strong> ${escapeHtml(item.person)}</p>` : ""}
-        ${item.comment ? `<p><strong>Kommentar:</strong> ${escapeHtml(item.comment)}</p>` : ""}
+        ${
+          item.childName
+            ? `<p><strong>Utförd av:</strong> ${escapeHtml(item.childName)}</p>
+               <p><strong>Kommentar:</strong> ${escapeHtml(item.childComment || "-")}</p>`
+            : `<p>Inte utförd ännu.</p>`
+        }
         <div class="admin-actions">
           ${adminButtons(status)}
         </div>
@@ -271,7 +337,7 @@ function renderAdmin() {
 
 function filterName(filter) {
   if (filter === "available") return "Aktuella";
-  if (filter === "pending") return "Betala ut";
+  if (filter === "completed") return "Betala ut";
   if (filter === "paid") return "Historik";
   return "";
 }
@@ -279,12 +345,12 @@ function filterName(filter) {
 function adminButtons(status) {
   if (status === "available") {
     return `
-      <button data-action="edit" class="secondary">Ändra</button>
+      <button data-action="edit" class="primary-action secondary">Ändra</button>
       <button data-action="delete" class="danger">Ta bort</button>
     `;
   }
 
-  if (status === "pending") {
+  if (status === "completed") {
     return `
       <button data-action="paid" class="primary-action">Klar</button>
       <button data-action="available" class="secondary">Lägg tillbaks</button>
@@ -316,14 +382,14 @@ async function handleAdminAction(item, action) {
         status: "paid",
         paidAt: serverTimestamp()
       });
-      showToast("✅ Markerad som klar");
+      showToast("Markerad som utbetald");
     }
 
     if (action === "available") {
       await updateDoc(itemRef, {
         status: "available",
-        person: "",
-        comment: "",
+        childName: "",
+        childComment: "",
         completedAt: null,
         paidAt: null
       });
@@ -345,21 +411,19 @@ async function handleAdminAction(item, action) {
 function openEditModal(item) {
   currentEditItem = item;
   editTitle.value = item.title || "";
-  editReward.value = rewardNumber(item.reward) || "";
-  editImage.value = "";
+  editReward.value = item.reward || "";
   editStatus.textContent = "";
-  editModal.classList.remove("hidden");
+  openModal(editModal);
 }
 
 async function saveEditItem() {
   if (!currentEditItem) return;
 
   const title = editTitle.value.trim();
-  const reward = rewardNumber(editReward.value.trim());
-  const file = editImage.files[0];
+  const reward = normalizeReward(editReward.value.trim());
 
   if (!title || !reward) {
-    editStatus.textContent = "Fyll i text och värde.";
+    editStatus.textContent = "Fyll i uppgift och belöning.";
     return;
   }
 
@@ -367,50 +431,54 @@ async function saveEditItem() {
   editStatus.textContent = "Sparar...";
 
   try {
-    const update = {
+    await updateDoc(doc(db, COLLECTION_NAME, currentEditItem.id), {
       title,
       reward,
       updatedAt: serverTimestamp()
-    };
+    });
 
-    if (file) {
-      editStatus.textContent = "Komprimerar bild...";
-      update.imageData = await compressImageToFirestoreSize(file);
-    }
-
-    await updateDoc(doc(db, COLLECTION_NAME, currentEditItem.id), update);
-
-    editModal.classList.add("hidden");
+    closeModal(editModal);
     currentEditItem = null;
     showToast("Ändringen är sparad");
   } catch (err) {
     console.error(err);
-    editStatus.textContent = err.message || "Något gick fel.";
+    editStatus.textContent = "Något gick fel.";
   } finally {
     saveEdit.disabled = false;
   }
 }
 
-function openHelpy(item) {
-  currentItem = item;
+function openProduct(index) {
+  currentIndex = index;
+  const item = publicItems[currentIndex];
+
   modalImage.src = item.imageData;
-  modalReward.textContent = getRewardText(item);
   modalTitle.textContent = item.title || "";
-  helpyModal.classList.remove("hidden");
+  modalReward.textContent = item.reward || "";
+
+  doneButton.disabled = false;
+  openModal(productModal);
+}
+
+function moveProduct(direction) {
+  if (!publicItems.length) return;
+  currentIndex += direction;
+  if (currentIndex < 0) currentIndex = publicItems.length - 1;
+  if (currentIndex >= publicItems.length) currentIndex = 0;
+  openProduct(currentIndex);
 }
 
 async function submitDone() {
-  const item = currentItem;
-  const person = donePerson.value;
-  const comment = doneComment.value.trim();
+  const item = publicItems[currentIndex];
+  const comment = childComment.value.trim();
 
-  if (!person) {
+  if (!selectedChild) {
     doneStatus.textContent = "Välj Milo eller Alice först.";
     return;
   }
 
   if (!item || statusOf(item) !== "available") {
-    doneStatus.textContent = "Den här Helpy är inte längre aktuell.";
+    doneStatus.textContent = "Den här Helpy finns inte längre bland aktuella.";
     return;
   }
 
@@ -419,18 +487,15 @@ async function submitDone() {
 
   try {
     await updateDoc(doc(db, COLLECTION_NAME, item.id), {
-      status: "pending",
-      person,
-      comment,
+      status: "completed",
+      childName: selectedChild,
+      childComment: comment,
       completedAt: serverTimestamp()
     });
 
-    doneModal.classList.add("hidden");
-    helpyModal.classList.add("hidden");
-    donePerson.value = "";
-    doneComment.value = "";
-    doneStatus.textContent = "";
-    showToast("✅ Helpy skickad<br>Väntar på utbetalning");
+    closeModal(doneModal);
+    closeModal(productModal);
+    showToast("Bra jobbat! Skickad för utbetalning 💚");
   } catch (err) {
     console.error(err);
     doneStatus.textContent = "Något gick fel. Testa igen.";
@@ -439,17 +504,17 @@ async function submitDone() {
   }
 }
 
-async function uploadNewHelpy() {
-  const file = helpyImage.files[0];
-  const title = helpyTitle.value.trim();
-  const reward = rewardNumber(helpyReward.value.trim());
+async function uploadNewItem() {
+  const file = itemImage.files[0];
+  const title = itemTitle.value.trim();
+  const reward = normalizeReward(itemReward.value.trim());
 
   if (!file || !title || !reward) {
-    uploadStatus.textContent = "Välj bild och fyll i text och värde.";
+    uploadStatus.textContent = "Välj bild och fyll i uppgift och belöning.";
     return;
   }
 
-  uploadHelpy.disabled = true;
+  uploadItem.disabled = true;
   uploadStatus.textContent = "Komprimerar bild...";
 
   try {
@@ -464,27 +529,27 @@ async function uploadNewHelpy() {
       title,
       reward,
       status: "available",
-      person: "",
-      comment: "",
+      childName: "",
+      childComment: "",
       createdAt: serverTimestamp(),
       completedAt: null,
-      paidAt: null,
-      updatedAt: null
+      paidAt: null
     });
 
-    helpyImage.value = "";
-    helpyTitle.value = "";
-    helpyReward.value = "";
+    itemImage.value = "";
+    itemTitle.value = "";
+    itemReward.value = "";
     uploadStatus.textContent = "";
-    uploadModal.classList.add("hidden");
+
+    closeModal(uploadModal);
     currentAdminFilter = "available";
     setActiveFilter("available");
-    showToast("✅ Helpy är upplagd");
+    showToast("Helpy skapad");
   } catch (err) {
     console.error(err);
     uploadStatus.textContent = err.message || "Något gick fel.";
   } finally {
-    uploadHelpy.disabled = false;
+    uploadItem.disabled = false;
   }
 }
 
@@ -538,7 +603,7 @@ function resizeImage(file, maxWidth, quality) {
 }
 
 function applyAdminState() {
-  if (isAdmin) {
+  if (isAdmin && adminVisible) {
     adminPanel.classList.remove("hidden");
   } else {
     adminPanel.classList.add("hidden");
@@ -553,26 +618,37 @@ function setActiveFilter(filter) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 adminGear.addEventListener("click", () => {
   if (isAdmin) {
+    adminVisible = true;
     applyAdminState();
-    showToast("Adminläge öppnat");
+    showToast("Adminvy öppnad");
     return;
   }
 
-  pinModal.classList.remove("hidden");
+  openModal(pinModal);
   pinInput.focus();
 });
 
-closePin.addEventListener("click", () => pinModal.classList.add("hidden"));
+closePin.addEventListener("click", () => closeModal(pinModal));
 
 pinSubmit.addEventListener("click", () => {
   if (pinInput.value === ADMIN_PIN) {
     isAdmin = true;
+    adminVisible = true;
     localStorage.setItem("helpy_admin", "true");
     pinInput.value = "";
     pinError.textContent = "";
-    pinModal.classList.add("hidden");
+    closeModal(pinModal);
     applyAdminState();
     showToast("Adminläge öppnat");
   } else {
@@ -580,47 +656,63 @@ pinSubmit.addEventListener("click", () => {
   }
 });
 
-pinInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") pinSubmit.click();
-});
-
 logoutAdmin.addEventListener("click", () => {
   isAdmin = false;
+  adminVisible = false;
   localStorage.removeItem("helpy_admin");
   applyAdminState();
   showToast("Utloggad");
 });
 
-closeAdminView.addEventListener("click", () => {
-  adminPanel.classList.add("hidden");
+closeAdminPanel.addEventListener("click", () => {
+  adminVisible = false;
+  applyAdminState();
   showToast("Adminvy stängd");
 });
 
 openUpload.addEventListener("click", () => {
-  helpyImage.value = "";
-  helpyTitle.value = "";
-  helpyReward.value = "";
+  itemImage.value = "";
+  itemTitle.value = "";
+  itemReward.value = "";
   uploadStatus.textContent = "";
-  uploadModal.classList.remove("hidden");
+  openModal(uploadModal);
 });
 
-closeUpload.addEventListener("click", () => uploadModal.classList.add("hidden"));
-uploadHelpy.addEventListener("click", uploadNewHelpy);
+closeUpload.addEventListener("click", () => closeModal(uploadModal));
+uploadItem.addEventListener("click", uploadNewItem);
 
-closeEdit.addEventListener("click", () => editModal.classList.add("hidden"));
+closeEdit.addEventListener("click", () => closeModal(editModal));
 saveEdit.addEventListener("click", saveEditItem);
 
-closeHelpy.addEventListener("click", () => helpyModal.classList.add("hidden"));
+closeProduct.addEventListener("click", () => closeModal(productModal));
+prevItem.addEventListener("click", () => moveProduct(-1));
+nextItem.addEventListener("click", () => moveProduct(1));
 
 doneButton.addEventListener("click", () => {
-  donePerson.value = "";
-  doneComment.value = "";
+  selectedChild = "";
+  childComment.value = "";
   doneStatus.textContent = "";
-  doneModal.classList.remove("hidden");
+  document.querySelectorAll(".child-option").forEach(btn => btn.classList.remove("active"));
+  openModal(doneModal);
 });
 
-closeDone.addEventListener("click", () => doneModal.classList.add("hidden"));
+document.querySelectorAll(".child-option").forEach(button => {
+  button.addEventListener("click", () => {
+    selectedChild = button.dataset.child;
+    document.querySelectorAll(".child-option").forEach(btn => btn.classList.remove("active"));
+    button.classList.add("active");
+  });
+});
+
+closeDone.addEventListener("click", () => closeModal(doneModal));
 sendDone.addEventListener("click", submitDone);
+
+statsButton.addEventListener("click", () => {
+  updateFamilyStats();
+  openModal(familyStatsModal);
+});
+
+closeFamilyStats.addEventListener("click", () => closeModal(familyStatsModal));
 
 document.querySelectorAll(".filter").forEach(button => {
   button.addEventListener("click", () => {
@@ -630,25 +722,31 @@ document.querySelectorAll(".filter").forEach(button => {
   });
 });
 
-pinModal.addEventListener("click", e => {
-  if (e.target === pinModal) pinModal.classList.add("hidden");
+[
+  productModal,
+  doneModal,
+  pinModal,
+  uploadModal,
+  editModal,
+  familyStatsModal
+].forEach(modal => {
+  modal.addEventListener("click", e => {
+    if (e.target === modal) closeModal(modal);
+  });
 });
 
-uploadModal.addEventListener("click", e => {
-  if (e.target === uploadModal) uploadModal.classList.add("hidden");
-});
+let touchStartY = 0;
 
-editModal.addEventListener("click", e => {
-  if (e.target === editModal) editModal.classList.add("hidden");
-});
+familyStatsModal.addEventListener("touchstart", e => {
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
 
-helpyModal.addEventListener("click", e => {
-  if (e.target === helpyModal) helpyModal.classList.add("hidden");
-});
-
-doneModal.addEventListener("click", e => {
-  if (e.target === doneModal) doneModal.classList.add("hidden");
-});
+familyStatsModal.addEventListener("touchend", e => {
+  const touchEndY = e.changedTouches[0].clientY;
+  if (touchEndY - touchStartY > 90) {
+    closeModal(familyStatsModal);
+  }
+}, { passive: true });
 
 const q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
 
@@ -658,12 +756,11 @@ onSnapshot(q, snapshot => {
     ...d.data()
   }));
 
-  updateKidStats();
   renderGallery();
   renderAdmin();
+  updateStats();
 }, error => {
   console.error(error);
-  gallery.innerHTML = "<p>Kunde inte läsa databasen. Kolla Firestore-reglerna.</p>";
   showToast("Kunde inte läsa databasen");
 });
 
