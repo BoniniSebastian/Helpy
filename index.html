@@ -2,44 +2,34 @@
 <html lang="sv">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Helpy</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
 <header class="header">
-  <button id="adminGear" class="gear" aria-label="Admin">⚙</button>
-  <h1>Helpy</h1>
+  <div>
+    <h1>Helpy</h1>
+    <p>Små uppgifter. Snabba belöningar.</p>
+  </div>
+
+  <div class="header-actions">
+    <button id="statsButton" class="stats-floating" aria-label="Familjens Helpys">$</button>
+    <button id="adminGear" class="gear" aria-label="Admin">⚙</button>
+  </div>
 </header>
 
 <main>
-  <section id="kidsStats" class="kids-stats">
-    <div class="kid-stat">
-      <h3>Milo</h3>
-      <p><strong id="miloPending">0 kr</strong><span>Kommande</span></p>
-      <p><strong id="miloDone">0</strong><span>Antal utförda</span></p>
-      <p><strong id="miloPaid">0 kr</strong><span>Utbetalt</span></p>
-    </div>
-
-    <div class="kid-stat">
-      <h3>Alice</h3>
-      <p><strong id="alicePending">0 kr</strong><span>Kommande</span></p>
-      <p><strong id="aliceDone">0</strong><span>Antal utförda</span></p>
-      <p><strong id="alicePaid">0 kr</strong><span>Utbetalt</span></p>
-    </div>
-  </section>
-
   <section id="adminPanel" class="admin-panel hidden">
     <div class="admin-top">
       <div>
         <h2>Admin</h2>
         <p>Hantera Helpys</p>
       </div>
-
       <div class="admin-top-actions">
-        <button id="openUpload" class="plus-button" aria-label="Lägg upp ny Helpy">+</button>
-        <button id="closeAdminView" class="small-button">Stäng adminvy</button>
+        <button id="openUpload" class="plus-button" aria-label="Lägg till ny Helpy">+</button>
+        <button id="closeAdminPanel" class="small-button secondary">Stäng adminvy</button>
         <button id="logoutAdmin" class="small-button">Logga ut</button>
       </div>
     </div>
@@ -48,11 +38,11 @@
       <div class="stat-card">
         <div id="statAvailable" class="stat-number">0</div>
         <div id="statAvailableValue" class="stat-label">tot. 0 kr</div>
-        <div class="stat-title">Antal Helpys</div>
+        <div class="stat-title">Aktuella</div>
       </div>
       <div class="stat-card">
-        <div id="statPending" class="stat-number">0</div>
-        <div id="statPendingValue" class="stat-label">tot. 0 kr</div>
+        <div id="statCompleted" class="stat-number">0</div>
+        <div id="statCompletedValue" class="stat-label">tot. 0 kr</div>
         <div class="stat-title">Färdiga Helpys</div>
       </div>
       <div class="stat-card">
@@ -63,24 +53,61 @@
     </div>
 
     <div class="filters">
-      <button class="filter active" data-filter="available">Aktuella</button>
-      <button class="filter" data-filter="pending">Betala ut</button>
+      <button class="filter" data-filter="available">Aktuella</button>
+      <button class="filter active" data-filter="completed">Betala ut</button>
       <button class="filter" data-filter="paid">Historik</button>
+    </div>
+
+    <div id="historySplit" class="history-split hidden">
+      <div>
+        <strong>Milo</strong>
+        <span id="historyMilo">0 Helpys · 0 kr</span>
+      </div>
+      <div>
+        <strong>Alice</strong>
+        <span id="historyAlice">0 Helpys · 0 kr</span>
+      </div>
     </div>
 
     <div id="adminList" class="admin-list"></div>
   </section>
 
-  <section id="gallery" class="gallery">
-    <p>Laddar Helpys...</p>
-  </section>
+  <section id="gallery" class="gallery"></section>
 </main>
+
+<div id="familyStatsModal" class="stats-overlay hidden">
+  <div class="family-stats-card">
+    <button id="closeFamilyStats" class="close">×</button>
+    <h2>Familjens Helpys</h2>
+    <p class="stats-subtitle">Här ser ni hur det går! 💚</p>
+
+    <div class="family-stats-grid">
+      <article class="child-card milo">
+        <h3>Milo</h3>
+        <div id="miloPending" class="big-money">0 kr</div>
+        <p>Väntar på utbetalning</p>
+        <div class="divider"></div>
+        <div class="child-row"><span>✔ Utförda Helpys</span><strong id="miloDone">0</strong></div>
+        <div class="child-row"><span>💰 Utbetalt</span><strong id="miloPaid">0 kr</strong></div>
+      </article>
+
+      <article class="child-card alice">
+        <h3>Alice</h3>
+        <div id="alicePending" class="big-money">0 kr</div>
+        <p>Väntar på utbetalning</p>
+        <div class="divider"></div>
+        <div class="child-row"><span>✔ Utförda Helpys</span><strong id="aliceDone">0</strong></div>
+        <div class="child-row"><span>💰 Utbetalt</span><strong id="alicePaid">0 kr</strong></div>
+      </article>
+    </div>
+  </div>
+</div>
 
 <div id="pinModal" class="overlay hidden">
   <div class="popup">
     <button id="closePin" class="close">×</button>
     <h2>Admin</h2>
-    <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="PIN-kod" />
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN-kod" />
     <button id="pinSubmit">Öppna admin</button>
     <p id="pinError" class="error"></p>
   </div>
@@ -90,10 +117,10 @@
   <div class="popup">
     <button id="closeUpload" class="close">×</button>
     <h2>Ny Helpy</h2>
-    <input id="helpyImage" type="file" accept="image/*" />
-    <input id="helpyTitle" type="text" placeholder="Text, t.ex. Töm diskmaskinen" />
-    <input id="helpyReward" type="number" inputmode="numeric" placeholder="Värde, t.ex. 20" />
-    <button id="uploadHelpy">Publicera</button>
+    <input id="itemImage" type="file" accept="image/*" />
+    <input id="itemTitle" type="text" placeholder="Uppgift, t.ex. Duka bordet" />
+    <input id="itemReward" type="text" placeholder="Belöning, t.ex. 20" />
+    <button id="uploadItem">Skapa Helpy</button>
     <p id="uploadStatus"></p>
   </div>
 </div>
@@ -102,21 +129,22 @@
   <div class="popup">
     <button id="closeEdit" class="close">×</button>
     <h2>Ändra Helpy</h2>
-    <input id="editTitle" type="text" placeholder="Text" />
-    <input id="editReward" type="number" inputmode="numeric" placeholder="Värde" />
-    <input id="editImage" type="file" accept="image/*" />
+    <input id="editTitle" type="text" placeholder="Uppgift" />
+    <input id="editReward" type="text" placeholder="Belöning" />
     <button id="saveEdit">Spara ändring</button>
     <p id="editStatus"></p>
   </div>
 </div>
 
-<div id="helpyModal" class="overlay hidden">
+<div id="productModal" class="overlay hidden">
   <div class="product-modal">
-    <button id="closeHelpy" class="close">×</button>
+    <button id="closeProduct" class="close">×</button>
+    <button id="prevItem" class="nav left">‹</button>
+    <button id="nextItem" class="nav right">›</button>
     <img id="modalImage" src="" alt="" />
     <div class="product-info">
-      <h2 id="modalReward"></h2>
-      <p id="modalTitle"></p>
+      <h2 id="modalTitle"></h2>
+      <p id="modalReward"></p>
       <button id="doneButton">Färdigt!</button>
     </div>
   </div>
@@ -125,13 +153,14 @@
 <div id="doneModal" class="overlay hidden">
   <div class="popup">
     <button id="closeDone" class="close">×</button>
-    <h2>Klarmarkera</h2>
-    <select id="donePerson">
-      <option value="">Välj namn</option>
-      <option value="Milo">Milo</option>
-      <option value="Alice">Alice</option>
-    </select>
-    <textarea id="doneComment" placeholder="Kommentar, frivilligt"></textarea>
+    <h2>Vem gjorde Helpy?</h2>
+
+    <div class="child-select">
+      <button type="button" class="child-option" data-child="Milo">Milo</button>
+      <button type="button" class="child-option" data-child="Alice">Alice</button>
+    </div>
+
+    <textarea id="childComment" placeholder="Kommentar, frivilligt"></textarea>
     <button id="sendDone">Skicka</button>
     <p id="doneStatus"></p>
   </div>
